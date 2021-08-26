@@ -29,9 +29,11 @@ dataDir = baseDir.joinpath('2005-17 selected')
 #dataDir = Path(r'D:\Aqualyd\SIO_ORH\Data\WW ES80 2018-2021\Trip 78\AOS\5m Calibrations 17.8.18')
 #dataDir = Path(r'D:\Aqualyd\SIO_ORH\Data\WW ES80 2018-2021\Trip 81 survey')
 #dataDir = dataDir.joinpath(r'Trip 77/All trip')
-dataDir = Path(r'C:\Users\gavin\Data - not synced\temp\Files with errors\NMEA checksum failed')
-
-
+#dataDir = Path(r'C:\Users\gavin\Data - not synced\temp\Files with errors\NMEA checksum failed')
+#dataDir = Path(r'C:\Users\gavin\Data - not synced\temp\Files with errors\NMEA ParseError')
+#dataDir = Path(r'E:\Aqualyd\SIO_ORH\Data\2005-17 selected\2006 Acoustics\IOR Acoustic Data Nov-Dec 2006')
+#dataDir = Path(r'C:\Users\gavin\Data - not synced\temp\Files with errors\No pings')
+#dataDir = Path(r'C:\Users\gavin\Data - not synced\temp\Files with errors\New folder')
 
 # The name of the file that the positions get saved to.
 posFileName = 'pos.csv'
@@ -58,14 +60,17 @@ for f in rawFiles:
 parentDirs = np.unique(p)
 
 # Directories to skip cause they are large or cause unresolved errors
-ignoreDirs = [dataDir.joinpath(r'Trip 78/AOS/Calibration Trawl 18.08.18/Acoustic'),
-              dataDir.joinpath(r'Trip 83/Calibration')]
+ignoreDirs = [dataDir.joinpath(r'WW ES80 2018-2021/Trip 78/AOS/Calibration Trawl 18.08.18/Acoustic'),
+              dataDir.joinpath(r'WW ES80 2018-2021/Trip 83/Calibration'),
+              dataDir.joinpath(r'2014 Acoustics\WW 2014 Calibrations\willwatch aos cal 1 and 2'),
+              dataDir.joinpath(r'2014 Acoustics\WW 2014 Calibrations\willwatch aos cal3'),
+              dataDir.joinpath(r'2014 Acoustics\WW 2014 Calibrations\WillWatch_ES70_Cal')]
 #ignoreDirs = []
 
 # New list of directories without the ignored ones
 parentDirsTrimmed = [p for p in parentDirs if p not in ignoreDirs]
 
-for p_i in range(len(parentDirsTrimmed)):
+for p_i in range(247,len(parentDirsTrimmed)):
     
     p = parentDirsTrimmed[p_i]
     rf = sorted(p.glob('*.raw'))
@@ -89,6 +94,11 @@ for p_i in range(len(parentDirsTrimmed)):
 
     # A directory of files
     for rawfile in rf:
+        # small files generally have no echo data in them and cause echopype to
+        # fail, so skip those files.
+        if rawfile.stat().st_size < 2000:
+            continue
+        
         print(f'Reading {rawfile}')
 
         file = open(rawfile, "rb")
@@ -147,14 +157,26 @@ for s in posFileSet:
                     print(f'Adding {fname} to {s[1]}')
                     outfile.write(infile.read())
 
-# do this again, but subsample the points (one point for every minute)
-posFiles = dataDir.rglob(posFileName)
+# do this again, but subsample the points (one point for every minute, assuming
+# the orignal data is once per second).
+posFiles = baseDir.rglob(posFileName)
+
 header = True
-with open(dataDir.joinpath('points_subsampled.csv'), 'w') as outfile:
+with open(baseDir.joinpath('points_per_minute 2015-2021.csv'), 'w') as outfile:
     for fname in posFiles:
         print(f'Adding {fname}')
-        pos_df = pd.read_csv(fname)
-        if len(pos_df) > 1000:
+        pos_df = pd.read_csv(fname, date_parser=date_utc)
+        # remove any rows that have empty data (appear as NaN) in the rows
+        pos_df.dropna(axis=0, how='any', inplace=True)
+        # Add the timezone to the timestamp. This fixes a devious behaviour when
+        # reading this file into QGIS via the delimited text method. If no 
+        # timezone is given, QGIS assumes that the timezone is that of the computer
+        # running this program. If any timestamp falls into the period when 
+        # the clocks change from standard time to summer time, QGIS will silently
+        # drop the time from the timestamp.
+        if len(pos_df) > 0:
+            pos_df['timestamp'] = pos_df['timestamp'] + '+0'
+        if len(pos_df) > 120:
             pos_df = pos_df.iloc[::60,:]
         pos_df.to_csv(fname.parent.joinpath('pos_subsampled.csv'), index=False)
         pos_df.to_csv(outfile, mode='a', header=header, index=False)
