@@ -6,7 +6,7 @@
 dataDir = 'E:\Aqualyd\SIO_ORH\Data\WW ES80 2018-2021\Trip 78\Hull\ES60';
 outDir = 'E:\Aqualyd\SIO_ORH\Data\WW ES80 2018-2021\Trip 78\Hull\ES60-GGA';
 
-% Trip 67
+% Trip 67 - DONE
 dataDir = 'E:\Aqualyd\SIO_ORH\Data\2005-17 selected\2016 Acoustics\Trip 67';
 outDir = 'E:\Aqualyd\SIO_ORH\Data\2005-17 selected\2016 Acoustics\Trip 67-GLL';
 
@@ -16,31 +16,33 @@ outDir = 'E:\Aqualyd\SIO_ORH\Data\2005-17 selected\2016 Acoustics\Trip 67-GLL\su
 dataDir = 'E:\Aqualyd\SIO_ORH\Data\2005-17 selected\2016 Acoustics\Trip 67\open ocean survey';
 outDir = 'E:\Aqualyd\SIO_ORH\Data\2005-17 selected\2016 Acoustics\Trip 67-GLL\open ocean survey';
 
+dataDir = 'E:\Aqualyd\SIO_ORH\Data\2005-17 selected\2016 Acoustics\Trip 67\calibration willwtch 2016 10 5';
+outDir = 'E:\Aqualyd\SIO_ORH\Data\2005-17 selected\2016 Acoustics\Trip 67-GLL\calibration willwtch 2016 10 5';
+
 % Trip 77 - DONE
 dataDir = 'E:\Aqualyd\SIO_ORH\Data\WW ES80 2018-2021\Trip 77\All Trip';
 outDir = 'E:\Aqualyd\SIO_ORH\Data\WW ES80 2018-2021\Trip 77\All Trip-GLL';
 % D20180624-T234738.raw failed
 % D20180704-T010518.raw failed
 
-dataDir = 'E:\Aqualyd\SIO_ORH\Data\2005-17 selected\2016 Acoustics\Trip 67\calibration willwtch 2016 10 5';
-outDir = 'E:\Aqualyd\SIO_ORH\Data\2005-17 selected\2016 Acoustics\Trip 67-GLL\calibration willwtch 2016 10 5';
+% 2015 data
+dataDir = 'E:\Aqualyd\SIO_ORH\Data\2005-17 selected\2015 Acoustics';
+% output directory will be under dataDir, but with '-NMEA' added
 
-
-d = dir(fullfile(dataDir, '*.raw'));
+d = dir(fullfile(dataDir, '**/*.raw'));
 
 numFiles = length(d);
 
 for i = 1:numFiles
-    disp(['Doing ' d(i).name ' (' num2str(i) ' of ' num2str(numFiles) ')'])
+    disp(['Doing ' fullfile(d(i).folder, d(i).name) ' (' num2str(i) ' of ' num2str(numFiles) ')'])
+    
+    outDir = replace(d(i).folder, dataDir, [dataDir '-NMEA']);
+    if ~isfolder(outDir)
+        mkdir(outDir)
+    end
+    
     dfile = fullfile(d(i).folder, d(i).name);
     ofile = fullfile(outDir, d(i).name);
-    
-%   % read in the raw file
-%   [header, data] = readEKRaw(dfile, 'VesselSpeed', 1, 'VTGSource', 'GPRMC', ...
-%       'GPSSource', 'GPRMC', 'RawNMEA', true, 'RequireGPSChecksum', false);
-   
-%   % write out the raw file
-%    writeEKRaw(ofile, header, data, 'GPS', true, 'VesselSpeed', true);
 
     headerlength = cHeader.length(); % bytes
 
@@ -62,14 +64,13 @@ for i = 1:numFiles
             dgData = fread(fid, dglength-headerlength);
             fread(fid, 1, 'int32'); % the trailing datagram marker
 
-            % if RMC datagram, make up a GLL datagram
+            % if RMC datagram, make up a GLL and VTG datagram
             if strcmp(header.type, 'NME0')
                 %
                 nmeadata = char(dgData');
                 if strncmp(nmeadata, '$GPRMC', 6)
-                   %format = '%2d %2d %f %c %2d %f %c %3d %f %c %f %f %6d %f';
-                   %[out{1:14}] = strread(nmeadata, format, 1, 'delimiter', ',');
                    out = split(nmeadata, ',');
+                   
                    % make a GLL from the RMC
                    gll = ['GPGLL,' out{4} ',' out{5} ',' out{6} ',' out{7} ',' out{2}];
                    % write the gll out as a new datagram, using the same
@@ -78,6 +79,16 @@ for i = 1:numFiles
                    fwrite(nfid, dgLength, 'int32');
                    header.write(nfid)
                    fwrite(nfid, gll);
+                   fwrite(nfid, dgLength, 'int32');
+
+                   % make a VTG from the RMC
+                   vtg = ['GPVTG,' out{9} ',T,,M,' out{8} ',N,,K,'];
+                   % write the vtg out as a new datagram, using the same
+                   % header as for the RMC message
+                   dgLength = length(vtg) + header.length();
+                   fwrite(nfid, dgLength, 'int32');
+                   header.write(nfid)
+                   fwrite(nfid, vtg);
                    fwrite(nfid, dgLength, 'int32');
                 end
             end
