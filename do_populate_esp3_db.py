@@ -20,7 +20,10 @@ from haversine import haversine, Unit
 from netCDF4 import Dataset
 import gsw
 from scipy.stats import hmean
+import xml.etree.ElementTree as ET
 
+import sys
+sys.path.append(r'C:\Users\gavin\Data - not synced\Code\python\seawater')
 from sw_absorption import sw_absorption
 
 baseDir = Path(r'E:\Aqualyd\SIO_ORH\Data')
@@ -52,6 +55,7 @@ ctds = pd.read_csv(projectDir.joinpath('Data').joinpath('argo_positions.csv'), p
 ctd_positions = np.array(list(zip(ctds.lat.values, ctds.lon.values)))
 
 for d in dataDirs:
+    print(f'Processing directory {d.name}')
     logbook = d.joinpath(logbookFilename)
     # copy the template database and survey file to the directory
     shutil.copy(logbookTemplate, logbook)
@@ -68,6 +72,7 @@ for d in dataDirs:
     # file in the directory and use the echopype library to parse the file.
     firstFile = list(d.glob('*.raw'))[0]
     
+    print('\tGetting position from first file in directory.')
     file = open(firstFile, "rb")
     headers = file.read(8)
     file.close()
@@ -82,7 +87,6 @@ for d in dataDirs:
         print(f'Unknown first datagram type: {first_datagram}')
         sonar_model = 'unknown'
             
-    print(f'  File type is {sonar_model} - first datagram type is {first_datagram}')
     ed = ep.open_raw(firstFile, sonar_model=sonar_model)
         
     # Pull out the lat/lon for the current file
@@ -95,17 +99,17 @@ for d in dataDirs:
     
     # Work out the distance and times between the first transect in the directory
     # and all ctd locations
-    d = lambda ctd_pos: haversine(ctd_pos, (lat, lon), unit=Unit.KILOMETERS)
-    dists = np.array([d(i) for i in ctd_positions]) # [km]
-    times = ctds.timestamp - pd.to_datetime(transects.start_time[0])
+    dist = lambda ctd_pos: haversine(ctd_pos, (lat, lon), unit=Unit.KILOMETERS)
+    dists = np.array([dist(i) for i in ctd_positions]) # [km]
+    times = ctds.timestamp - pd.to_datetime(transects.iloc[0].start_time)
     time_diffs = times.apply(lambda x: abs(x.total_seconds())/3600) # [hours]
     
     # 1 km of distance has equal weight as 1 hour of time
     spatial_temporal_distance = dists * time_diffs
     i_min = spatial_temporal_distance.idxmin()
-    print(f'Closest CTD was {dists[i_min]:.0f} km and {time_diffs[i_min]:.0f} hours away')
+    print(f'\tClosest CTD was {dists[i_min]:.0f} km and {time_diffs[i_min]:.0f} hours away')
     
-    # now get the CTD data for the selected cast and give that to esp3.
+    # now get the CTD data for the selected cast and calculate water properties.
     ctd_to_use = ctds.iloc[i_min]
     
     rootgrp = Dataset(ctd_to_use.filepath, "r")
@@ -117,7 +121,7 @@ for d in dataDirs:
     rootgrp.close()
     
     # Assuming that most of the data is about 1000 m deep, calculate mean sound 
-    # speed and absorption between the surface and that depth for use by esp3.
+    # speed and absorption between the surface and that depth.
     max_depth = 1000.0 # [m]
     sa = gsw.SA_from_SP(psal, pres, lon, lat)
     ct = gsw.CT_from_t(sa, temp, pres)
@@ -130,6 +134,10 @@ for d in dataDirs:
     
     mean_c = hmean(c[depth_mask])
     mean_abs = np.mean(alpha[depth_mask])
+    mean_t = np.mean(temp)
+    mean_s = np.mean(psal)
+    
+    print(f'\tMean c = {mean_c:.1f} m/s, alpha = {mean_abs:.1f} dB/km, temp = {mean_t:.1f} degC, salinity = {mean_s:.1f} PSU')
     
     # populate the database
     con = sqlite3.connect(logbook)
@@ -137,6 +145,7 @@ for d in dataDirs:
     # we redo the transect numbering sequentially based on when the snapshot changes
     current_snapshot = -1
     
+    print(f'\tUpdating esp3 database with {len(transects)} transects.')
     for i, t in transects.iterrows():
         feature = t.feature.replace("'", "''")
 
@@ -150,7 +159,7 @@ for d in dataDirs:
             # transect is entirely within one file
             cmd = ("INSERT INTO logbook (Filename, Snapshot, Stratum, Type, Transect, StartTime, EndTime, Comment) "
                    f"VALUES('{t.start_filename}', {t.snapshot}, '{feature}', 'Acoustic', {new_transect}, '{t.start_time}', '{t.end_time}', '{t.comment}');")
-            print(cmd)
+            #print(cmd)
             con.execute(cmd)
             con.commit()
         else: # transect covers more than one file
@@ -180,12 +189,21 @@ for d in dataDirs:
                 if withinTransect:
                     cmd = ("INSERT INTO logbook (Filename, Snapshot, Stratum, Type, Transect, StartTime, EndTime, Comment) "
                           f"VALUES('{filename}', {t.snapshot}, '{feature}', 'Acoustic', {new_transect}, '{start_time}', '{end_time}', '{t.comment}');")
-                    print(cmd)
+                    #print(cmd)
                     con.execute(cmd)
                     con.commit()
                 if lastFile:
                     withinTransect = False
     con.close()
+    
+    # update the survey_options file with the water properties, etc.
+    print('\tUpdating survey_options.xml file.')
+    tree = ET.parse(d.joinpath(surveyFilename))
+    root = tree.getroot()
+    root[0].set('Temperature', f'{mean_t:.1f}')
+    root[0].set('SoundSpeed', f'{mean_c:.1f}')
+    root[0].set('Salinity', f'{mean_s:.1f}')
+    tree.write(d.joinpath(surveyFilename))
     
     # create script file to process the directory
     
