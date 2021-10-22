@@ -21,7 +21,7 @@ newDrive = 'E:'
 projectDir = Path(r'C:\Users\gavin\OneDrive - Aqualyd Limited\Documents\Aqualyd\Projects\2021-05 SIO ORH survey analysis')
 
 originalDataDir = Path(r'E:\Aqualyd\SIO_ORH\Data')
-surveyDataDir = originalDataDir.joinpath('Survey_data2')
+surveyDataDir = originalDataDir.joinpath('Survey_data')
 
 metaDataFile = projectDir.joinpath(r'Data\Metadata.xlsx')
 
