@@ -12,7 +12,7 @@ import numpy as np
 from cftime import num2date
 import pandas as pd
 
-dataDir = Path(r'C:\Users\gavin\Data - not synced\temp\argo_download')
+dataDir = Path(r'C:\Users\gavin\OneDrive - Aqualyd Limited\Documents\Aqualyd\Projects\2021-05 SIO ORH survey analysis\Data\Argo_profiles')
 outputDir = Path(r'C:\Users\gavin\OneDrive - Aqualyd Limited\Documents\Aqualyd\Projects\2021-05 SIO ORH survey analysis\Data')
 
 profiles = dataDir.glob('**/*_prof.nc')
