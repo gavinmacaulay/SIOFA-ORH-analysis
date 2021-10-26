@@ -21,6 +21,8 @@ from netCDF4 import Dataset
 import gsw
 from scipy.stats import hmean
 import xml.etree.ElementTree as ET
+import matplotlib.pyplot as plt
+from matplotlib.offsetbox import AnchoredText
 
 import sys
 sys.path.append(r'C:\Users\gavin\Data - not synced\Code\python\seawater')
@@ -37,6 +39,8 @@ surveyTemplate = baseDir.joinpath('template_' + surveyFilename)
 
 projectDir = Path(r'C:\Users\gavin\OneDrive - Aqualyd Limited\Documents\Aqualyd\Projects\2021-05 SIO ORH survey analysis')
 metaDataFile = projectDir.joinpath(r'Data\Metadata.xlsx')
+
+resultsDir = projectDir.joinpath('Results')
 
 # Get the survey directories
 dataDirs = surveyDataDir.glob('*')
@@ -104,8 +108,10 @@ for d in dataDirs:
     times = ctds.timestamp - pd.to_datetime(transects.iloc[0].start_time)
     time_diffs = times.apply(lambda x: abs(x.total_seconds())/3600) # [hours]
     
-    # 1 km of distance has equal weight as 1 hour of time
-    spatial_temporal_distance = dists * time_diffs
+    dist_weight = 0.1 # weight applied to the distance in km
+    time_weight = 1 # weight applied to the time period in hours
+    # we'll minimise this sum:
+    spatial_temporal_distance = dists*dist_weight + time_diffs*time_weight
     i_min = spatial_temporal_distance.idxmin()
     print(f'\tClosest CTD was {dists[i_min]:.0f} km and {time_diffs[i_min]:.0f} hours away')
     
@@ -130,12 +136,39 @@ for d in dataDirs:
     rho = gsw.rho(sa, ct, pres)
     alpha = sw_absorption(38.0, psal, temp, pres, 'fandg', 8.0)
     
-    depth_mask = pres.data <= max_depth
+    depth = pres.data # assuming mBar equals metres...
+    depth_mask = depth <= max_depth
     
     mean_c = hmean(c[depth_mask])
     mean_abs = np.mean(alpha[depth_mask])
     mean_t = np.mean(temp)
     mean_s = np.mean(psal)
+    
+    # Make a plot of the cast for future use
+    fig, ((ax0, ax1, ax2)) = plt.subplots(nrows=1, ncols=3, sharex=False, sharey=True)
+    
+    ax0.plot(temp, depth)
+    ax0.grid(True)
+    ax0.set_ylim(bottom=0)
+    ax0.invert_yaxis()
+    ax0.set_ylabel('Depth [m]')
+    ax0.set_xlabel('Temperature [\u00B0C]')
+
+    ax1.plot(psal, depth)
+    ax1.grid(True)
+    ax1.invert_yaxis()
+    ax1.set_xlabel('Salinity [PSU]')
+
+    ax2.plot(c, depth)
+    ax2.grid(True)
+    ax2.invert_yaxis()
+    ax2.set_xlabel('Sound speed [m/s]')
+
+    ax0.add_artist(AnchoredText(f'{dists[i_min]:.0f} km\n{time_diffs[i_min]:.0f} hours', 
+                                loc='upper left', frameon=False))
+ 
+    fig.savefig(resultsDir.joinpath(f'CTD-{d.name}.png'), bbox_inches='tight', pad_inches=0.05)
+    plt.close() 
     
     print(f'\tMean c = {mean_c:.1f} m/s, alpha = {mean_abs:.1f} dB/km, temp = {mean_t:.1f} degC, salinity = {mean_s:.1f} PSU')
     
