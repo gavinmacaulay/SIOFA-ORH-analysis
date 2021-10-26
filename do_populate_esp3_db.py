@@ -18,6 +18,7 @@ import datetime as dt
 import echopype as ep
 from haversine import haversine, Unit
 from netCDF4 import Dataset
+from netCDF4 import chartostring
 import gsw
 from scipy.stats import hmean
 import xml.etree.ElementTree as ET
@@ -119,6 +120,7 @@ for d in dataDirs:
     ctd_to_use = ctds.iloc[i_min]
     
     rootgrp = Dataset(ctd_to_use.filepath, "r")
+    platform_num = chartostring(rootgrp['PLATFORM_NUMBER'][0].data)
     cycle_number = rootgrp['CYCLE_NUMBER'][:]
     i = np.where(cycle_number == ctd_to_use.cycle_number)[0][0] # assume there is always and only one value to find
     pres = rootgrp['PRES'][i]
@@ -134,7 +136,7 @@ for d in dataDirs:
 
     c = gsw.sound_speed(sa, ct, pres)
     rho = gsw.rho(sa, ct, pres)
-    alpha = sw_absorption(38.0, psal, temp, pres, 'fandg', 8.0)
+    alpha = sw_absorption(38.0, psal, temp, pres, 'doonan', 8.0)
     
     depth = pres.data # assuming mBar equals metres...
     depth_mask = depth <= max_depth
@@ -164,10 +166,10 @@ for d in dataDirs:
     ax2.invert_yaxis()
     ax2.set_xlabel('Sound speed [m/s]')
 
-    ax0.add_artist(AnchoredText(f'{dists[i_min]:.0f} km\n{time_diffs[i_min]:.0f} hours', 
+    ax0.add_artist(AnchoredText(f'Cast {platform_num}\nCycle {ctd_to_use.cycle_number}\n{dists[i_min]:.0f} km\n{time_diffs[i_min]:.0f} hours', 
                                 loc='upper left', frameon=False))
  
-    fig.savefig(resultsDir.joinpath(f'CTD-{d.name}.png'), bbox_inches='tight', pad_inches=0.05)
+    fig.savefig(resultsDir.joinpath('CTD').joinpath(f'CTD-{d.name}.png'), bbox_inches='tight', pad_inches=0.05)
     plt.close() 
     
     print(f'\tMean c = {mean_c:.1f} m/s, alpha = {mean_abs:.1f} dB/km, temp = {mean_t:.1f} degC, salinity = {mean_s:.1f} PSU')
