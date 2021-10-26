@@ -42,8 +42,8 @@ for p in profiles:
     rootgrp.close()
     
 # Now find profiles that are with the months of June to August
-start_month = 6
-end_month = 8
+start_month = 5
+end_month = 9
 start_year = 2018
 end_year = 2021
 
