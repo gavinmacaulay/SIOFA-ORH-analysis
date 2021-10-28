@@ -27,8 +27,7 @@ outDir = 'E:\Aqualyd\SIO_ORH\Data\WW ES80 2018-2021\Trip 77\All Trip-GLL';
 
 
 
-mainDir = 'E:\Aqualyd\SIO_ORH\Data\2005-17 selected';
-mainDir = 'E:\Aqualyd\SIO_ORH\Data\Survey_data2';
+mainDir = 'E:\Aqualyd\SIO_ORH\Data\Survey_data\ByYear';
 
 dirs = dir(mainDir);
 
