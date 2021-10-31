@@ -189,6 +189,7 @@ for survey_id, survey in surveys:
         # Now calculate the survey biomass
         transects_in_survey = pd.DataFrame(transects_in_survey)
         w = transects_in_survey.transect_rho.mean() # [fish/m^2]
+        rho_i = w # for code outside this loop, to be consistent with the parallel code
         biomass = w * survey_area * mean_orh_weight / 1000.0 # [tonnes]
         
         n = transects_in_survey.transect.shape[0] # number of transects in this survey
@@ -220,7 +221,7 @@ tableFile = projectDir.joinpath('docs').joinpath('ToR 3 report').joinpath('ToR 3
 
 # adjust r_per_survey to suit the Word table
 t1_word = r_per_survey[['area', 'feature', 'survey_start_date', 'survey_type', 'mean_rho', 'biomass', 'cv', 'num_transects', 'survey_area']]
-col_format =           ['v',    'v',       'v',                 'v',           'v:.1f',    'v:.0f',   'v:.0f','v',           'v/1e6:.1f']
+col_format =           ['v',    'v',       'v',                 'v',           'v:.2f',    'v:.0f',   'v:.0f','v',           'v/1e6:.1f']
 units =                ['',     '',        '',                  '',            '[fish/m^2]','[t]',    '[%]', '',             '[km^2]']
 
 # Discard surveys with biomass of 0.0
@@ -255,10 +256,54 @@ for i, column in enumerate(t1_word):
         table.cell(row+1, i).text = cell_str
 document.save(tableFile)
 
+#%%
+# while we're here, create a table of the environment data for the surveys that we have
+# a biomass for
+enviro = pd.read_csv(metaDataFile.parent.joinpath('Metadata_enviroment_generated.csv'))
+
+enviro = enviro.assign(area = r_per_survey.area, feature = r_per_survey.feature, survey_start_date = r_per_survey.survey_start_date)
+
+# keep just the surveys with biomass
+e = enviro[enviro.survey_id.isin(r_per_survey[r_per_survey.biomass > 0.0].survey_id.astype('int64').to_list())]
+
+tableFile = projectDir.joinpath('docs').joinpath('ToR 3 report').joinpath('environment table.docx')
+
+# adjust e to suit the Word table
+t1_word    = e[['area', 'feature', 'survey_start_date', 'mean_t', 'mean_s', 'mean_c', 'mean_abs', 'distance', 'time']]
+col_format =   ['v',    'v',       'v',                 'v:.1f',  'v:.1f',  'v:.1f',  'v:.1f',    'v:.0f',     'v:.0f']
+units =        ['',     '',        '',                  '[degC]', '[PSU]',  '[m/s]',  '[dB/km]',  '[km]',     '[h]']
+
+# Sort for table
+t1_word = t1_word.sort_values(by=['area', 'feature', 'survey_start_date'])
+
+def fstr(template):
+    return eval(f"f'{template}'")
+
+document = Document()
+table = document.add_table(rows=t1_word.shape[0]+1, cols=t1_word.shape[1])
+for i, column in enumerate(t1_word):
+    prev_cell_str = ''
+    table.cell(0, i).text = column.replace('_', ' ').capitalize() + ' ' + units[i]
+    for row in range(t1_word.shape[0]):
+        v = (t1_word[column].iloc[row])
+        cell_str = fstr('{' + col_format[i] + '}')
+        if (column == 'area'): # drop area name when it is in multiple consecutive rows
+            if (cell_str == prev_cell_str):
+                cell_str = ''
+            else:
+                prev_cell_str = cell_str
+
+        if (column == 'feature'): # drop feature name when it is in multiple consecutive rows
+            if (cell_str == prev_cell_str):
+                cell_str = ''
+            else:
+                prev_cell_str = cell_str
+            
+        table.cell(row+1, i).text = cell_str
+document.save(tableFile)
 
 #%%
-# now aggregate over areas... Need to average somehow for multiple surveys 
-# of the same feature in the same year.
+# some plots of the results
 
 fig, ((ax0, ax1)) = plt.subplots(nrows=1, ncols=2)
 
