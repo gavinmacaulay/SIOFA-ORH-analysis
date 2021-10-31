@@ -22,6 +22,10 @@ from netCDF4 import chartostring
 import gsw
 from scipy.stats import hmean
 
+import sys
+sys.path.append(r'C:\Users\gavin\Data - not synced\Code\python\seawater')
+from sw_absorption import sw_absorption
+
 newDrive = 'E:'
 
 projectDir = Path(r'C:\Users\gavin\OneDrive - Aqualyd Limited\Documents\Aqualyd\Projects\2021-05 SIO ORH survey analysis')
@@ -53,7 +57,6 @@ t2 = t1[t1.accepted]
 accepted_transects = md[md['survey_id'].isin(t2.survey_id.values)]
 accepted_transects.to_csv(metaDataFile.parent.joinpath('Metadata_selected_transects_generated.csv'), index=False)
 
-
 # for each survey that passes the filter copy the files to a per-year directory and make
 # up a LSSS calibration file that contains the appropriate sound speed and absorption, 
 # derived from the Argo data.
@@ -69,6 +72,7 @@ calibration_sound_speed = []
 calibration_alpha = []
 calibration_argo_distance = []
 calibration_argo_time_period = []
+environment_summary = []
 
 
 for survey in t2.itertuples():
@@ -114,10 +118,10 @@ for survey in t2.itertuples():
     # and all ctd locations
     dist = lambda ctd_pos: haversine(ctd_pos, (lat, lon), unit=Unit.KILOMETERS)
     dists = np.array([dist(i) for i in ctd_positions]) # [km]
-    times = ctds.timestamp - pd.to_datetime(transects.iloc[0].start_time)
+    times = ctds.timestamp - survey.start_time
     time_diffs = times.apply(lambda x: abs(x.total_seconds())/3600) # [hours]
     
-    dist_weight = 0.1 # weight applied to the distance in km
+    dist_weight = 0.5 # weight applied to the distance in km
     time_weight = 1 # weight applied to the time period in hours
     # we'll minimise this sum:
     spatial_temporal_distance = dists*dist_weight + time_diffs*time_weight
@@ -154,6 +158,16 @@ for survey in t2.itertuples():
     mean_t = np.mean(temp)
     mean_s = np.mean(psal)
     
+    # accumulate the environment data for use in a table in the report
+    environment_summary.append({'survey_id': survey.survey_id,
+                                'mean_c': mean_c,
+                                'mean_abs': mean_abs,
+                                'mean_t': mean_t,
+                                'mean_s': mean_s,
+                                'distance': dists[i_min],
+                                'time': time_diffs[i_min],
+                                'date': str(first_ping_time)})
+    
     calibration_start_time.append(str(first_ping_time)[:19]+'Z')
     calibration_end_time.append(str(last_ping_time)[:19]+'Z')
     calibration_sound_speed.append(mean_c)
@@ -167,9 +181,9 @@ for survey in t2.itertuples():
     
     # Copy the raw files to the new survey directory
     print(f'Copying files from {survey.data_directory} to {dirName.name}')
-    for f in filesToCopy:
-        to_path = dirName.joinpath(f.name)
-        shutil.copy(f, to_path)
+    #for f in filesToCopy:
+    #    to_path = dirName.joinpath(f.name)
+    #    shutil.copy(f, to_path)
 
 # Get the calibration gains to use and use them along with the per survey
 # sound speed and absorption estimates
@@ -199,6 +213,12 @@ dirNameNMEA = dirName.parent / (dirName.name + '-NMEA')
 with open(dirNameNMEA.joinpath('calibration.xml'), 'w') as cal_file:
     cal_file.write(xml)
     
-    
+#%%
+# and write out the environment summary into csv for use later on
+enviro = pd.DataFrame(environment_summary)
+enviro.to_csv(metaDataFile.parent.joinpath('Metadata_enviroment_generated.csv'), index=False)
+
+
+
     
 
