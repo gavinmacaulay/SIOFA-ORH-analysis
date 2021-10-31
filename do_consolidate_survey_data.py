@@ -167,18 +167,31 @@ for survey in t2.itertuples():
     
     # Copy the raw files to the new survey directory
     print(f'Copying files from {survey.data_directory} to {dirName.name}')
-    # for f in filesToCopy:
-    #     to_path = dirName.joinpath(f.name)
-    #     shutil.copy(f, to_path)
+    for f in filesToCopy:
+        to_path = dirName.joinpath(f.name)
+        shutil.copy(f, to_path)
 
 # Get the calibration gains to use and use them along with the per survey
 # sound speed and absorption estimates
 
+cals = pd.read_excel(metaDataFile, sheet_name='calibration_to_use')
+
 # and make up the calibration.xml file for LSSS
 xml = '<?xml version="1.0" encoding="UTF-8"?>\n<calibration>\n'
-for i_cal in range(len(calibration_start_time)):
-    xml = xml + f'   <calibration begin="{calibration_start_time[i_cal]}" end="{calibration_end_time[i_cal]}">\n'
-    xml = xml + f'      <case channel="1" g="26.5" SA="1024:0.0, 2048:0.0" abs="{calibration_alpha[i_cal]*0.001:.5f}" sound="{calibration_sound_speed[i_cal]:.1f}"/>\n'
+for i, start_time in enumerate(calibration_start_time):
+    year = start_time[:4]
+    this_cal = cals[cals.year == int(year)]
+    if year == '2020':
+        g = this_cal.g0.values[1] # use the 2ms cal cause all our 2020 surveys use 2 ms
+        sa = this_cal.sa.values[1]
+        psi = this_cal.psi.values[1]
+    else:
+        g = this_cal.g0.values[0]
+        sa = this_cal.sa.values[0]
+        psi = this_cal.psi.values[0]
+    
+    xml = xml + f'   <calibration begin="{calibration_start_time[i]}" end="{calibration_end_time[i]}">\n'
+    xml = xml + f'      <case channel="1" g="{g}" SA="1024:{sa}, 2048:{sa}" equivalentBeamAngle = "{psi}" abs="{calibration_alpha[i]*0.001:.5f}" sound="{calibration_sound_speed[i]:.1f}"/>\n'
     xml = xml + '   </calibration>\n'
 xml = xml + '</calibration>\n'
 
