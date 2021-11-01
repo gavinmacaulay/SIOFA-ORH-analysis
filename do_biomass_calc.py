@@ -201,6 +201,7 @@ for survey_id, survey in surveys:
         
     r_per_transect.append(transects_in_survey)
     r_per_survey.append({'survey_id': survey_id,
+                         'survey_start_timestamp': survey.time.min(),
                          'survey_start_date': survey.time.min().date(),
                          'area': survey.area.values[0],
                          'feature': survey.feature.values[0],
