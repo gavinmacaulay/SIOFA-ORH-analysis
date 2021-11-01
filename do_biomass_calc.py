@@ -241,6 +241,8 @@ for i, column in enumerate(t1_word):
     table.cell(0, i).text = column.replace('_', ' ').capitalize() + ' ' + units[i]
     for row in range(t1_word.shape[0]):
         v = (t1_word[column].iloc[row])
+        if column == 'biomass':
+            v = np.round(v, decimals=-2) # round to nearest 100 kg
         cell_str = fstr('{' + col_format[i] + '}')
         if (column == 'area'): # drop area name when it is in multiple consecutive rows
             if (cell_str == prev_cell_str):
