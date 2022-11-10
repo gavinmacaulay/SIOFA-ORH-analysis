@@ -217,8 +217,10 @@ r_per_survey = pd.DataFrame(r_per_survey)
 
 #%%
 #################################################################
-# write the biomass results to a Word table
+# write the biomass results to a Word table and an Excel file (this was an 
+# extra request from SIOFA after submission of the draft ToR 3 report)
 tableFile = projectDir.joinpath('docs').joinpath('ToR 3 report').joinpath('ToR 3 biomass table.docx')
+excelFile = tableFile.parent.joinpath('biomass per feature.xlsx')
 
 # adjust r_per_survey to suit the Word table
 t1_word = r_per_survey[['area', 'feature', 'survey_start_date', 'survey_type', 'mean_rho', 'biomass', 'cv', 'num_transects', 'survey_area']]
@@ -230,6 +232,9 @@ t1_word = t1_word[t1_word.biomass > 0.0]
 
 # Sort for table
 t1_word = t1_word.sort_values(by=['area', 'feature', 'survey_start_date'])
+
+# save to Excel
+t1_word.to_excel(excelFile, sheet_name='Biomass results', index=False)
 
 def fstr(template):
     return eval(f"f'{template}'")
